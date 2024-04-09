@@ -2,21 +2,17 @@
 pragma solidity =0.8.17;
 
 import {BoundedKerosineVault} from "../core/Vault.kerosine.bounded.sol";
-import {ERC20}                from "@solmate/src/tokens/ERC20.sol";
+import {ERC20} from "@solmate/src/tokens/ERC20.sol";
 
 contract KerosineDenominator {
+    BoundedKerosineVault public boundedKerosineVault;
 
-  BoundedKerosineVault public boundedKerosineVault;
+    constructor(BoundedKerosineVault _boundedKerosineVault) {
+        boundedKerosineVault = _boundedKerosineVault;
+    }
 
-  constructor(
-    BoundedKerosineVault _boundedKerosineVault
-  ) {
-    boundedKerosineVault = _boundedKerosineVault;
-  }
-
-  function denominator() external view returns (uint) {
-    uint boundedKerosine = boundedKerosineVault.deposits();
-    return boundedKerosineVault.asset().totalSupply() + boundedKerosine;
-  } 
-
+    function denominator() external view returns (uint256) {
+        uint256 boundedKerosine = boundedKerosineVault.deposits();
+        return boundedKerosineVault.asset().totalSupply() + boundedKerosine;
+    }
 }
