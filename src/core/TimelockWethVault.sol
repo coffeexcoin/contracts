@@ -29,6 +29,8 @@ contract TimelockWethVault is IVault {
     using SafeCast for int;
     using FixedPointMathLib for uint;
 
+    error InsufficientFunds();
+
     uint public constant STALE_DATA_TIMEOUT = 90 minutes;
 
     uint public constant VEST_TIME = 180 days;
@@ -37,7 +39,6 @@ contract TimelockWethVault is IVault {
     ERC20 public immutable asset;
     IAggregatorV3 public immutable oracle;
 
-    mapping (uint=>uint) public id2asset;
     mapping(uint256 noteId => LinearVest vesting) private vesting;
 
     modifier onlyVaultManager() {
@@ -56,6 +57,9 @@ contract TimelockWethVault is IVault {
     }
 
     function deposit(uint id, uint amount) external onlyVaultManager {
+        _computeAndUpdateVested(noteId);
+        vesting[noteId].unvestedAmount += amount;
+        vesting[noteId].start = block.timestamp;
         // TODO: UPDATE VESTING
         emit Deposit(id, amount);
     }
@@ -65,7 +69,10 @@ contract TimelockWethVault is IVault {
         address to,
         uint amount
     ) external onlyVaultManager {
-        // TODO: VESTING
+        _computeAndUpdateVested(noteId);
+        if (amount > vesting[noteId].vestedAmount) {
+            revert InsufficientFunds(); 
+        }
         
         asset.safeTransfer(to, amount);
         emit Withdraw(id, to, amount);
@@ -79,7 +86,7 @@ contract TimelockWethVault is IVault {
 
     function getUsdValue(uint id) external view returns (uint) {
         return
-            (id2Asset(id) * assetPrice() * 1e18) /
+            (id2asset(id) * assetPrice() * 1e18) /
             10 ** oracle.decimals() /
             10 ** asset.decimals();
     }
@@ -91,11 +98,11 @@ contract TimelockWethVault is IVault {
         return answer.toUint256();
     }
 
-    function computeAndUpdateVested() {
+    function _computeAndUpdateVested(uint256 noteId) internal {
 
     }
 
-    function id2asset(uint256 noteId) external view returns (uint256) {
+    function id2asset(uint256 noteId) public view returns (uint256) {
         LinearVest memory vest = vesting[noteId];
         if (vest.start + VEST_TIME < block.timestamp) {
             return vest.unvestedAmount + vest.vestedAmount;
