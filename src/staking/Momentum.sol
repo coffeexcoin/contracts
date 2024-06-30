@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IERC721Enumerable} from "forge-std/interfaces/IERC721.sol";
-import {IVaultManager} from "./interfaces/IVaultManager.sol";
-import {IVault} from "./interfaces/IVault.sol";
+import {IVaultManager} from "../interfaces/IVaultManager.sol";
+import {IVault} from "../interfaces/IVault.sol";
 
 struct NoteMomentumData {
     // uint40 supports 34,000 years before overflow
     uint40 lastAction;
     // uint96 max is 79b at 18 decimals which is more than total kero supply
-    uint96 keroseneDeposited; 
+    uint96 keroseneDeposited;
     // uint120 supports deposit of entire kerosene supply by a single note for ~42 years before overflow
-    uint120 lastMomentum; 
+    uint120 lastMomentum;
 }
 
 contract Momentum is IERC20 {
@@ -20,7 +21,7 @@ contract Momentum is IERC20 {
 
     IERC20 public immutable KEROSENE;
     IVaultManager public immutable VAULT_MANAGER;
-    IVault public immutable KEROSENSE_VAULT;
+    IVault public immutable KEROSENE_VAULT;
     IERC721Enumerable public immutable DNFT;
 
     string public constant name = "Kerosene Momentum";
@@ -34,8 +35,8 @@ contract Momentum is IERC20 {
 
     constructor(address vaultManager, address keroseneVault, address dnft) {
         VAULT_MANAGER = IVaultManager(vaultManager);
-        KEROSENSE_VAULT = IVault(keroseneVault);
-        KEROSENE = IERC20(KEROSENSE_VAULT.asset());
+        KEROSENE_VAULT = IVault(keroseneVault);
+        KEROSENE = ERC20(KEROSENE_VAULT.asset());
         DNFT = IERC721Enumerable(dnft);
 
         // initialize momentum values
@@ -59,7 +60,7 @@ contract Momentum is IERC20 {
     /// @notice Returns the amount of tokens in existence.
     function totalSupply() external view returns (uint256) {
         uint256 timeElapsed = block.timestamp - globalLastUpdate;
-        uint256 keroseneInVault = KEROSENE.balanceOf(address(KEROSENSE_VAULT));
+        uint256 keroseneInVault = KEROSENE.balanceOf(address(KEROSENE_VAULT));
         uint256 momentumAccrued = timeElapsed * keroseneInVault;
         return globalLastKeroseneInVault + momentumAccrued;
     }
@@ -69,9 +70,18 @@ contract Momentum is IERC20 {
         uint256 totalMomentum;
         uint256 noteBalance = DNFT.balanceOf(account);
 
+        uint256 totalKeroseneInVault = KEROSENE.balanceOf(
+            address(KEROSENE_VAULT)
+        );
+
         for (uint256 i = 0; i < noteBalance; i++) {
             uint256 noteId = DNFT.tokenOfOwnerByIndex(account, i);
-            totalMomentum += _currentMomentum(noteId);
+            NoteMomentumData memory lastUpdate = noteData[noteId];
+            totalMomentum += _currentMomentum(
+                noteId,
+                totalKeroseneInVault,
+                lastUpdate
+            );
         }
 
         return totalMomentum;
@@ -134,7 +144,7 @@ contract Momentum is IERC20 {
 
         emit Transfer(
             address(0),
-            address(noteId),
+            address(DNFT.ownerOf(noteId)),
             newMomentum - lastUpdate.lastMomentum
         );
     }
