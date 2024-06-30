@@ -77,11 +77,7 @@ contract Momentum is IERC20 {
         for (uint256 i = 0; i < noteBalance; i++) {
             uint256 noteId = DNFT.tokenOfOwnerByIndex(account, i);
             NoteMomentumData memory lastUpdate = noteData[noteId];
-            totalMomentum += _currentMomentum(
-                noteId,
-                totalKeroseneInVault,
-                lastUpdate
-            );
+            totalMomentum += _computeMomentum(totalKeroseneInVault, lastUpdate);
         }
 
         return totalMomentum;
@@ -92,36 +88,33 @@ contract Momentum is IERC20 {
             address(KEROSENE_VAULT)
         );
         NoteMomentumData memory lastUpdate = noteData[noteId];
-        return _currentMomentum(noteId, totalKeroseneInVault, lastUpdate);
+        return _computeMomentum(totalKeroseneInVault, lastUpdate);
     }
 
     /// @notice Moves `amount` tokens from the caller's account to `to`.
-    function transfer(address to, uint256 amount) external returns (bool) {
+    function transfer(address, uint256) external pure returns (bool) {
         revert TransferNotAllowed();
     }
 
     /// @notice Returns the remaining number of tokens that `spender` is allowed
     /// to spend on behalf of `owner`
-    function allowance(
-        address owner,
-        address spender
-    ) external view returns (uint256) {
+    function allowance(address, address) external pure returns (uint256) {
         return 0;
     }
 
     /// @notice Sets `amount` as the allowance of `spender` over the caller's tokens.
     /// @dev Be aware of front-running risks: https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
-    function approve(address spender, uint256 amount) external returns (bool) {
+    function approve(address, uint256) external pure returns (bool) {
         revert TransferNotAllowed();
     }
 
     /// @notice Moves `amount` tokens from `from` to `to` using the allowance mechanism.
     /// `amount` is then deducted from the caller's allowance.
     function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) external returns (bool) {
+        address,
+        address,
+        uint256
+    ) external pure returns (bool) {
         revert TransferNotAllowed();
     }
 
@@ -135,8 +128,7 @@ contract Momentum is IERC20 {
             address(KEROSENE_VAULT)
         );
 
-        uint256 newMomentum = _currentMomentum(
-            noteId,
+        uint256 newMomentum = _computeMomentum(
             totalKeroseneInVault,
             lastUpdate
         );
@@ -148,7 +140,7 @@ contract Momentum is IERC20 {
         });
 
         globalLastUpdate = uint40(block.timestamp);
-        globalLastKeroseneInVault = uint192(totalKerosene);
+        globalLastKeroseneInVault = uint192(totalKeroseneInVault);
 
         emit Transfer(
             address(0),
@@ -157,7 +149,10 @@ contract Momentum is IERC20 {
         );
     }
 
-    function beforeKeroseneWithdrawn(uint256 noteId, uint256 amountWithdrawn) external {
+    function beforeKeroseneWithdrawn(
+        uint256 noteId,
+        uint256 amountWithdrawn
+    ) external {
         if (msg.sender != address(VAULT_MANAGER)) {
             revert NotVaultManager();
         }
@@ -166,8 +161,7 @@ contract Momentum is IERC20 {
         uint256 totalKeroseneInVault = KEROSENE.balanceOf(
             address(KEROSENE_VAULT)
         );
-        uint256 momentum = _currentMomentum(
-            noteId,
+        uint256 momentum = _computeMomentum(
             totalKeroseneInVault,
             noteData[noteId]
         );
@@ -178,17 +172,19 @@ contract Momentum is IERC20 {
 
         noteData[noteId] = NoteMomentumData({
             lastAction: uint40(block.timestamp),
-            keroseneDeposited: uint96(lastUpdate.keroseneDeposited - amountWithdrawn),
+            keroseneDeposited: uint96(
+                lastUpdate.keroseneDeposited - amountWithdrawn
+            ),
             lastMomentum: uint120(updatedMomentum)
         });
     }
 
-    function _currentMomentum(
-        uint256 noteId,
+    function _computeMomentum(
         uint256 totalKeroseneInVault,
         NoteMomentumData memory lastUpdate
     ) internal view returns (uint256) {
-        uint256 userShare = (uint256(lastUpdate.keroseneDeposited) * 1e18) / totalKeroseneInVault;
+        uint256 userShare = (uint256(lastUpdate.keroseneDeposited) * 1e18) /
+            totalKeroseneInVault;
         uint256 timePassed = block.timestamp - lastUpdate.lastAction;
         uint256 momentumAccrued = timePassed * userShare;
 
