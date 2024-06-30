@@ -125,7 +125,7 @@ contract Momentum is IERC20 {
         revert TransferNotAllowed();
     }
 
-    function keroseneDeposited(uint256 noteId, uint256 totalKerosene) external {
+    function afterKeroseneDeposited(uint256 noteId) external {
         if (msg.sender != address(VAULT_MANAGER)) {
             revert NotVaultManager();
         }
@@ -157,14 +157,30 @@ contract Momentum is IERC20 {
         );
     }
 
-    function keroseneWithdrawn(uint256 noteId, uint256 totalKerosene) external {
+    function beforeKeroseneWithdrawn(uint256 noteId, uint256 amountWithdrawn) external {
         if (msg.sender != address(VAULT_MANAGER)) {
             revert NotVaultManager();
         }
 
-        // TODO: Implement slashing of momentum on withdraw
-        // Slashing amount is calculated by
-        // (KEROSENE withdrawal / total Note KEROSENE deposited) * (momentum quantity)
+        NoteMomentumData memory lastUpdate = noteData[noteId];
+        uint256 totalKeroseneInVault = KEROSENE.balanceOf(
+            address(KEROSENE_VAULT)
+        );
+        uint256 momentum = _currentMomentum(
+            noteId,
+            totalKeroseneInVault,
+            noteData[noteId]
+        );
+
+        uint256 slash = (amountWithdrawn * 1e18) / lastUpdate.keroseneDeposited;
+        uint256 slashedMomentum = (slash * momentum) / 1e18;
+        uint256 updatedMomentum = momentum - slashedMomentum;
+
+        noteData[noteId] = NoteMomentumData({
+            lastAction: uint40(block.timestamp),
+            keroseneDeposited: uint96(lastUpdate.keroseneDeposited - amountWithdrawn),
+            lastMomentum: uint120(updatedMomentum)
+        });
     }
 
     function _currentMomentum(
