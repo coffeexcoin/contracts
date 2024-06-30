@@ -59,6 +59,11 @@ contract Momentum is IERC20 {
 
     /// @notice Returns the amount of tokens in existence.
     function totalSupply() external view returns (uint256) {
+        // TODO - I don't think this logic is right. 
+        // should be last global MOMENTUM + (time elapsed * kerosene in vault)?
+        // invariant, total supply should equal sum of all note amounts but looping through
+        // all notes is expensive from a gas perspective especially as the number of notes grows
+        // unbounded over time.
         uint256 timeElapsed = block.timestamp - globalLastUpdate;
         uint256 keroseneInVault = KEROSENE.balanceOf(address(KEROSENE_VAULT));
         uint256 momentumAccrued = timeElapsed * keroseneInVault;
