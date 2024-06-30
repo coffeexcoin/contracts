@@ -37,6 +37,23 @@ contract Momentum is IERC20 {
         KEROSENSE_VAULT = IVault(keroseneVault);
         KEROSENE = IERC20(KEROSENSE_VAULT.asset());
         DNFT = IERC721Enumerable(dnft);
+
+        // initialize momentum values
+        globalLastUpdate = uint40(block.timestamp);
+        globalLastKeroseneInVault = uint192(KEROSENE.balanceOf(keroseneVault));
+        uint256 dnftSupply = DNFT.totalSupply();
+        for (uint256 i = 0; i < dnftSupply; ++i) {
+            uint256 noteId = DNFT.tokenByIndex(i);
+            uint256 depositedKero = KEROSENE_VAULT.id2asset(noteId);
+            if (depositedKero == 0) {
+                continue;
+            }
+            noteData[noteId] = NoteMomentumData({
+                lastAction: uint40(block.timestamp),
+                keroseneDeposited: uint96(depositedKero),
+                lastMomentum: uint120(0)
+            });
+        }
     }
 
     /// @notice Returns the amount of tokens in existence.
@@ -108,10 +125,8 @@ contract Momentum is IERC20 {
 
         noteData[noteId] = NoteMomentumData({
             lastAction: uint40(block.timestamp),
-            keroseneDeposited: uint108(
-                KEROSENE.balanceOf(address(KEROSENE_VAULT))
-            ),
-            lastMomentum: uint108(newMomentum)
+            keroseneDeposited: uint96(KEROSENE_VAULT.id2asset(noteId)),
+            lastMomentum: uint120(newMomentum)
         });
 
         globalLastUpdate = uint40(block.timestamp);
