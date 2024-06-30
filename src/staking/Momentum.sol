@@ -177,6 +177,9 @@ contract Momentum is IERC20 {
             ),
             lastMomentum: uint120(updatedMomentum)
         });
+
+        globalLastUpdate = uint40(block.timestamp);
+        globalLastKeroseneInVault = uint192(totalKeroseneInVault);
     }
 
     function _computeMomentum(
