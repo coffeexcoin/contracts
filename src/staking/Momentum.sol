@@ -19,7 +19,7 @@ contract Momentum is IERC20 {
     error TransferNotAllowed();
     error NotVaultManager();
 
-    IERC20 public immutable KEROSENE;
+    ERC20 public immutable KEROSENE;
     IVaultManager public immutable VAULT_MANAGER;
     IVault public immutable KEROSENE_VAULT;
     IERC721Enumerable public immutable DNFT;
@@ -85,6 +85,14 @@ contract Momentum is IERC20 {
         }
 
         return totalMomentum;
+    }
+
+    function balanceOfNote(uint256 noteId) external view returns (uint256) {
+        uint256 totalKeroseneInVault = KEROSENE.balanceOf(
+            address(KEROSENE_VAULT)
+        );
+        NoteMomentumData memory lastUpdate = noteData[noteId];
+        return _currentMomentum(noteId, totalKeroseneInVault, lastUpdate);
     }
 
     /// @notice Moves `amount` tokens from the caller's account to `to`.
@@ -164,8 +172,7 @@ contract Momentum is IERC20 {
         uint256 totalKeroseneInVault,
         NoteMomentumData memory lastUpdate
     ) internal view returns (uint256) {
-        uint256 noteKerosene = KEROSENE_VAULT.id2asset(noteId);
-        uint256 userShare = (noteKerosene * 1e18) / totalKeroseneInVault;
+        uint256 userShare = (uint256(lastUpdate.keroseneDeposited) * 1e18) / totalKeroseneInVault;
         uint256 timePassed = block.timestamp - lastUpdate.lastAction;
         uint256 momentumAccrued = timePassed * userShare;
 
