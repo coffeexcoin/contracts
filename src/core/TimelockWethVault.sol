@@ -19,9 +19,8 @@ ETH supply. This should be enough for any vesting contract.
 */
 struct LinearVest {
     uint40 start;
-    uint40 lastUpdate;
-    uint88 unvestedAmount; 
-    uint88 vestedAmount;
+    uint96 amount;
+    uint96 claimed;
 }
 
 contract TimelockWethVault is IVault {
@@ -30,6 +29,7 @@ contract TimelockWethVault is IVault {
     using FixedPointMathLib for uint;
 
     error InsufficientFunds();
+    error TimelockExists();
 
     uint public constant STALE_DATA_TIMEOUT = 90 minutes;
 
@@ -40,6 +40,7 @@ contract TimelockWethVault is IVault {
     IAggregatorV3 public immutable oracle;
 
     mapping(uint256 noteId => LinearVest vesting) private vesting;
+    mapping(uint256 => uint256) private stored;
 
     modifier onlyVaultManager() {
         if (msg.sender != address(vaultManager)) revert NotVaultManager();
@@ -56,11 +57,22 @@ contract TimelockWethVault is IVault {
         oracle = _oracle;
     }
 
-    function deposit(uint id, uint amount) external onlyVaultManager {
-        _computeAndUpdateVested(noteId);
-        vesting[noteId].unvestedAmount += amount;
-        vesting[noteId].start = block.timestamp;
-        // TODO: UPDATE VESTING
+    function deposit(uint256 id, uint amount) external onlyVaultManager {
+        stored[id] += amount;
+        emit Deposit(id, amount);
+    }
+
+    function timelock(uint id, uint amount) external onlyVaultManager {
+        if (vesting[id].start > 0) {
+            revert TimelockExists();
+        }
+
+        vesting[id] = LinearVest({
+            start: uint40(block.timestamp),
+            amount: uint96(amount),
+            claimed: 0
+        });
+
         emit Deposit(id, amount);
     }
 
@@ -69,18 +81,25 @@ contract TimelockWethVault is IVault {
         address to,
         uint amount
     ) external onlyVaultManager {
-        _computeAndUpdateVested(noteId);
-        if (amount > vesting[noteId].vestedAmount) {
-            revert InsufficientFunds(); 
+        uint256 storedAmount = stored[id];
+        if (amount > storedAmount) {
+            _claimVest(id);
         }
-        
+        if (amount > storedAmount) {
+            revert InsufficientFunds();
+        }
+
+        stored[id] = storedAmount - amount;
         asset.safeTransfer(to, amount);
         emit Withdraw(id, to, amount);
     }
 
     function move(uint from, uint to, uint amount) external onlyVaultManager {
-        id2asset[from] -= amount;
-        id2asset[to] += amount;
+        if (amount > stored[from]) {
+            _claimVest(from);
+        }
+        stored[from] -= amount;
+        stored[to] += amount;
         emit Move(from, to, amount);
     }
 
@@ -98,17 +117,30 @@ contract TimelockWethVault is IVault {
         return answer.toUint256();
     }
 
-    function _computeAndUpdateVested(uint256 noteId) internal {
-
-    }
-
     function id2asset(uint256 noteId) public view returns (uint256) {
         LinearVest memory vest = vesting[noteId];
-        if (vest.start + VEST_TIME < block.timestamp) {
-            return vest.unvestedAmount + vest.vestedAmount;
+        uint256 storedAmount = stored[noteId];
+        return storedAmount + _vestedAmount(vest) - vest.claimed;
+    }
+
+    function _claimVest(uint256 noteId) private {
+        LinearVest memory vest = vesting[noteId];
+
+        if (vest.claimed < vest.amount) {
+            uint256 vestedAmount = _vestedAmount(vest);
+            stored[noteId] += vestedAmount - vest.claimed;
+            vesting[noteId].claimed = uint72(vestedAmount);
         }
-        // compute the vested amount as the sum of the stored vested amount and the amount that has vested since the last update
-        uint256 vestedAmount = vest.vestedAmount + ((block.timestamp - vest.lastUpdate) * vest.unvestedAmount / VEST_TIME);
-        return vestedAmount;
+    }
+
+    function _vestedAmount(
+        LinearVest memory vest
+    ) private view returns (uint256) {
+        uint256 elapsed = block.timestamp - vest.start;
+        if (elapsed > VEST_TIME) {
+            return vest.amount;
+        } else {
+            return elapsed.mulDivDown(vest.amount, VEST_TIME);
+        }
     }
 }
