@@ -13,13 +13,13 @@ contract PaymentsTest is BaseTest {
     weth.mint(address(this), amount);
 
     weth.approve(address(payments), amount);
-    payments.depositWithFee(id, address(wethVault), amount);
+    payments.deposit(id, address(wethVault), amount);
   }
 
   function test_depositETHWithFee() public {
     uint id = dNft.mintNft{value: 1 ether}(address(this));
 
     vaultManager.add(id, address(wethVault));
-    payments.depositETHWithFee{value: 1 ether}(id, address(wethVault));
+    payments.depositETH{value: 1 ether}(id, address(wethVault));
   }
 }

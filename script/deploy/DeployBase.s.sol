@@ -63,12 +63,12 @@ contract DeployBase is Script {
 
       Payments payments             = new Payments(
         vaultManager,
-        IWETH(_asset)
+        IWETH(_asset),
+        DNft(dNft)
       );
 
       //
-      payments.setFee(_fee);
-      payments.setFeeRecipient(_feeRecipient);
+      payments.setDepositFee(_fee);
 
       // 
       vaultManagerLicenser.add(address(vaultManager));

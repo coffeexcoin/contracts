@@ -38,9 +38,16 @@ contract VaultManagerV4 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
   mapping (uint/* id */ => uint/* block */)  public   lastDeposit;
 
   DyadXP public dyadXP;
+  mapping (address => bool) public authorizedRelays;
 
-  modifier isDNftOwner(uint id) {
-    if (dNft.ownerOf(id) != msg.sender) revert NotOwner();    _;
+  modifier authorizeDnft(uint id) {
+    if (!authorizedRelays[msg.sender]) {
+      if (dNft.ownerOf(id) != msg.sender) {
+        revert NotOwner();
+      }
+    }
+    
+    _;
   }
   modifier isValidDNft(uint id) {
     if (dNft.ownerOf(id) == address(0)) revert InvalidDNft(); _;
@@ -62,7 +69,7 @@ contract VaultManagerV4 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
       address vault
   ) 
     external
-      isDNftOwner(id)
+      authorizeDnft(id)
   {
     if (!vaultLicenser.isLicensed(vault))   revert VaultNotLicensed();
     if ( vaults[id].length() >= MAX_VAULTS) revert TooManyVaults();
@@ -75,7 +82,7 @@ contract VaultManagerV4 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
       address vault
   ) 
     external
-      isDNftOwner(id)
+      authorizeDnft(id)
   {
     if (Vault(vault).id2asset(id) > 0) revert VaultHasAssets();
     if (!vaults[id].remove(vault))     revert VaultNotAdded();
@@ -88,7 +95,7 @@ contract VaultManagerV4 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
     uint    amount
   ) 
     external 
-      isDNftOwner(id)
+      authorizeDnft(id)
   {
     lastDeposit[id] = block.number;
     Vault _vault = Vault(vault);
@@ -107,7 +114,7 @@ contract VaultManagerV4 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
     address to
   ) 
     public
-      isDNftOwner(id)
+      authorizeDnft(id)
   {
     if (lastDeposit[id] == block.number) revert CanNotWithdrawInSameBlock();
     if (vault == KEROSENE_VAULT) dyadXP.beforeKeroseneWithdrawn(id, amount);
@@ -121,7 +128,7 @@ contract VaultManagerV4 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
     address to
   )
     external 
-      isDNftOwner(id)
+      authorizeDnft(id)
   {
     dyad.mint(id, to, amount); // changes `mintedDyad` and `cr`
     _checkExoValueAndCollatRatio(id);
@@ -146,7 +153,7 @@ contract VaultManagerV4 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
     uint amount
   ) 
     public 
-      isDNftOwner(id)
+      authorizeDnft(id)
   {
     dyad.burn(id, msg.sender, amount);
     emit BurnDyad(id, amount, msg.sender);
@@ -159,7 +166,7 @@ contract VaultManagerV4 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
     address to
   )
     external 
-      isDNftOwner(id)
+      authorizeDnft(id)
     returns (uint) { 
       burnDyad(id, amount);
       Vault _vault = Vault(vault);
@@ -306,6 +313,10 @@ contract VaultManagerV4 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
     view 
     returns (bool) {
       return vaults[id].contains(vault);
+  }
+
+  function setAuthorizedRelay(address relay, bool authorized) external onlyOwner {
+    authorizedRelays[relay] = authorized;
   }
 
   // ----------------- UPGRADABILITY ----------------- //
