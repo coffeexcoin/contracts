@@ -198,6 +198,12 @@ contract VaultManagerV5 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
       return asset;
   }
 
+  /// @notice Liquidates a dNFT position
+  /// @param id The ID of the dNFT to be liquidated
+  /// @param to The address where the collateral will be sent
+  /// @param amount The amount of DYAD to be burned
+  /// @return assetVaults The addresses of the vaults where the collateral was sent
+  /// @return amounts The amounts of collateral sent to each vault
   function liquidate(
     uint id,
     uint to,
@@ -206,6 +212,7 @@ contract VaultManagerV5 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
     external 
       isValidDNft(id)
       isValidDNft(to)
+      returns (address[] memory assetVaults, uint[] memory amounts)
     {
       uint cr = collatRatio(id);
       if (cr >= MIN_COLLAT_RATIO) revert CrTooHigh();
@@ -215,11 +222,16 @@ contract VaultManagerV5 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
       lastDeposit[to] = block.number; // `move` acts like a deposit
 
       uint totalValue = getTotalValue(id);
-      if (totalValue == 0) return;
 
       uint numberOfVaults = vaults[id].length();
+      assetVaults = new address[](numberOfVaults);
+      amounts = new uint[](numberOfVaults);
+
+      if (totalValue == 0) return (assetVaults, amounts);
+
       for (uint i = 0; i < numberOfVaults; i++) {
         Vault vault = Vault(vaults[id].at(i));
+        assetVaults[i] = address(vault);
         if (vaultLicenser.isLicensed(address(vault))) {
           uint256 depositAmount = vault.id2asset(id);
           if (depositAmount == 0) continue;
@@ -244,6 +256,7 @@ contract VaultManagerV5 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
                       / vault.assetPrice() 
                       / 1e18;
           }
+          amounts[i] = asset;
           if (address(vault) == KEROSENE_VAULT) {
             dyadXP.beforeKeroseneWithdrawn(id, asset);
           }
