@@ -222,12 +222,13 @@ contract VaultManagerV5 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
       lastDeposit[to] = block.number; // `move` acts like a deposit
 
       uint totalValue = getTotalValue(id);
-
       uint numberOfVaults = vaults[id].length();
       assetVaults = new address[](numberOfVaults);
       amounts = new uint[](numberOfVaults);
 
-      if (totalValue == 0) return (assetVaults, amounts);
+      if (totalValue == 0) {
+        return (assetVaults, amounts);
+      } 
 
       for (uint i = 0; i < numberOfVaults; i++) {
         Vault vault = Vault(vaults[id].at(i));
@@ -250,11 +251,10 @@ contract VaultManagerV5 is IVaultManager, UUPSUpgradeable, OwnableUpgradeable {
                                 .divWadDown(debt)
                                 .mulWadDown(LIQUIDATION_REWARD);
             uint valueToMove = amountShare + amountShare.mulWadUp(reward_rate);
-            uint cappedValue = valueToMove > value ? value : valueToMove;
-            asset = cappedValue 
-                      * (10**(vault.oracle().decimals() + vault.asset().decimals())) 
-                      / vault.assetPrice() 
-                      / 1e18;
+            asset = valueToMove * (share.mulWadUp(totalValue));
+            if (asset > depositAmount) {
+              asset = depositAmount;
+            }
           }
           amounts[i] = asset;
           if (address(vault) == KEROSENE_VAULT) {
